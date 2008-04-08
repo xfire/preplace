@@ -13,76 +13,22 @@
 #   -d          directory
 #   -I          ignore case
 #   -M          multiline
+#   -q          quiet
+#   -n          dry run
+#   --dry-run   
 
 import os
 import re
 import fnmatch
 import itertools
+import fileinput
 from optparse import OptionParser
-
-
-parser = OptionParser(usage = 'usage: %prog [options] pattern pattern [files]')
-
-parser.set_defaults(backup = False)
-parser.add_option('-b',
-                  action = 'store_true',
-                  dest = 'backup',
-                  help = 'backup files')
-
-parser.set_defaults(backup_suffix = '.orig')
-parser.add_option('--suffix',
-                  dest = 'backup_suffix',
-                  type = 'string',
-                  metavar = 'S',
-                  help = 'backup suffix (default: .orig)')
-
-parser.set_defaults(recursive = False)
-parser.add_option('-r',
-                  action = 'store_true',
-                  dest = 'recursive',
-                  help = 'recursive')
-
-parser.set_defaults(directory = '.')
-parser.add_option('-d',
-                  dest = 'directory',
-                  type = 'string',
-                  metavar = 'D',
-                  help = 'directory')
-
-parser.set_defaults(ignore_case = False)
-parser.add_option('-I',
-                  action = 'store_true',
-                  dest = 'ignore_case',
-                  help = 'ignore case')
-
-parser.set_defaults(multiline = False)
-parser.add_option('-M',
-                  action = 'store_true',
-                  dest = 'multiline',
-                  help = 'multiline')
-
-parser.set_defaults(quiet = False)
-parser.add_option('-q',
-                  action = 'store_true',
-                  dest = 'quiet',
-                  help = 'quiet')
-
-(options, args) = parser.parse_args()
-
-if len(args) < 2:
-    parser.error('you must specify the search/replace patterns!')
-
-print options, args
 
 def no(seq, pred=None):
     """Returns True if pred(x) is false for every element in the iterable"""
     for elem in itertools.ifilter(pred, seq):
         return False
     return True
-
-file_patterns = args[2:]
-if not file_patterns or no(file_patterns, lambda x: not x.startswith('~')):
-    file_patterns.insert(0, '*')
 
 def msg(s):
     """print message if not quiet"""
@@ -111,14 +57,94 @@ def filter(names):
             l.append(n)
     return l
 
-def visitor(root, dirs, files):
-    files = filter(files)
+def replace(file):
+    try:
+        args = {}
+        if options.backup:
+            args['backup'] = options.backup_suffix
+        for line in fileinput.input(file, inplace = 1, **args):
+            print re.sub(SR, RR, line)
+    except IOError, e:
+        msg(e)
+
+def dir_visitor(root, dirs, files):
+    files = filter([os.path.join(root, f) for f in files])
     if files:
         for fn in files:
-            msg('  %s' % os.path.join(root, fn))
+            msg('%s' % fn)
+            if not options.dry_run:
+                replace(fn)
     if not options.recursive:
         del dirs[:]
+    ndirs = filter(dirs)
+    dirs[:] = ndirs
 
-for root, dirs, files in os.walk(options.directory):
-    visitor(root, dirs, files)
+
+if __name__ == '__main__':
+    parser = OptionParser(usage = 'usage: %prog [options] pattern pattern [files]')
+
+    parser.set_defaults(backup = False)
+    parser.add_option('-b',
+                      action = 'store_true',
+                      dest = 'backup',
+                      help = 'backup files')
+
+    parser.set_defaults(backup_suffix = '.orig')
+    parser.add_option('--suffix',
+                      dest = 'backup_suffix',
+                      type = 'string',
+                      metavar = 'S',
+                      help = 'backup suffix (default: .orig)')
+
+    parser.set_defaults(recursive = False)
+    parser.add_option('-r',
+                      action = 'store_true',
+                      dest = 'recursive',
+                      help = 'recursive')
+
+    parser.set_defaults(directory = '.')
+    parser.add_option('-d',
+                      dest = 'directory',
+                      type = 'string',
+                      metavar = 'D',
+                      help = 'directory')
+
+    parser.set_defaults(ignore_case = False)
+    parser.add_option('-I',
+                      action = 'store_true',
+                      dest = 'ignore_case',
+                      help = 'ignore case')
+
+    parser.set_defaults(multiline = False)
+    parser.add_option('-M',
+                      action = 'store_true',
+                      dest = 'multiline',
+                      help = 'multiline')
+
+    parser.set_defaults(quiet = False)
+    parser.add_option('-q',
+                      action = 'store_true',
+                      dest = 'quiet',
+                      help = 'quiet')
+
+    parser.set_defaults(dry_run = False)
+    parser.add_option('-n', '--dry-run',
+                      action = 'store_true',
+                      dest = 'dry_run',
+                      help = 'dry_run')
+
+    (options, args) = parser.parse_args()
+
+    if len(args) < 2:
+        parser.error('you must specify the search/replace patterns!')
+
+    file_patterns = args[2:]
+    if not file_patterns or no(file_patterns, lambda x: not x.startswith('~')):
+        file_patterns.insert(0, '*')
+
+    SR = re.compile(args[0])
+    RR = args[1]
+
+    for root, dirs, files in os.walk(options.directory):
+        dir_visitor(root, dirs, files)
 
