@@ -22,6 +22,7 @@ import re
 import fnmatch
 import itertools
 import fileinput
+import difflib
 from optparse import OptionParser
 
 def no(seq, pred=None):
@@ -35,7 +36,7 @@ def msg(s):
     if not options.quiet:
         print s
 
-def filter(names):
+def filter_names(names):
     """filter list of names using provided filters"""
     def match(name):
         m = False
@@ -57,7 +58,7 @@ def filter(names):
             l.append(n)
     return l
 
-def replace(file):
+def file_replace(file):
     try:
         args = {}
         if options.backup:
@@ -67,16 +68,36 @@ def replace(file):
     except IOError, e:
         msg(e)
 
+def file_diff(file):
+    changed = False
+    try:
+        f = open(file, 'r')
+        try:
+            lines = f.readlines()
+        finally:
+            f.close()
+
+        for line in difflib.unified_diff(lines, [re.sub(SR, RR, l) for l in lines], file, file + '.new'):
+            print line,
+            changed = True
+    except IOError, e:
+        msg(e)
+    return changed
+
 def dir_visitor(root, dirs, files):
-    files = filter([os.path.join(root, f) for f in files])
+    files = filter_names([os.path.join(root, f) for f in files])
     if files:
         for fn in files:
-            msg('%s' % fn)
+            if options.verbose:
+                if file_diff(fn):
+                    print
+            else:
+                msg('processing %s' % fn)
             if not options.dry_run:
-                replace(fn)
+                file_replace(fn)
     if not options.recursive:
         del dirs[:]
-    ndirs = filter(dirs)
+    ndirs = filter_names(dirs)
     dirs[:] = ndirs
 
 
@@ -127,6 +148,12 @@ if __name__ == '__main__':
                       dest = 'quiet',
                       help = 'quiet')
 
+    parser.set_defaults(verbose = False)
+    parser.add_option('-v',
+                      action = 'store_true',
+                      dest = 'verbose',
+                      help = 'verbose (unified diff output)')
+
     parser.set_defaults(dry_run = False)
     parser.add_option('-n', '--dry-run',
                       action = 'store_true',
@@ -142,7 +169,13 @@ if __name__ == '__main__':
     if not file_patterns or no(file_patterns, lambda x: not x.startswith('~')):
         file_patterns.insert(0, '*')
 
-    SR = re.compile(args[0])
+    re_flags = []
+    if options.ignore_case:
+        re_flags.append(re.I)
+    if options.multiline:
+        re_flags.append(re.M)
+
+    SR = re.compile(args[0], *re_flags)
     RR = args[1]
 
     for root, dirs, files in os.walk(options.directory):
