@@ -98,9 +98,6 @@ def dir_visitor(root, dirs, files):
                 file_replace(fn)
     if not options.recursive:
         del dirs[:]
-    ndirs = filter_names(dirs)
-    dirs[:] = ndirs
-
 
 if __name__ == '__main__':
     parser = OptionParser(usage = 'usage: %prog [options] pattern pattern [files]')
