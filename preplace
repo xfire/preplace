@@ -86,7 +86,7 @@ def file_diff(file):
     return changed
 
 def dir_visitor(root, dirs, files):
-    files = filter_names([os.path.join(root, f) for f in files])
+    files = [os.path.join(root, f) for f in filter_names(files)]
     if files:
         for fn in files:
             if options.verbose:
