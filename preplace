@@ -38,27 +38,29 @@ def msg(s):
     if not options.quiet:
         print s
 
-def filter_names(names):
+def filter_names(names, filters = None):
     """filter list of names using provided filters"""
+    if not filters:
+        filters = []
+
     def match(name):
         m = False
         # includes
-        for pattern in [p for p in file_patterns if not p.startswith('~')]:
+        for pattern in [p for p in file_patterns + filters if not p.startswith('~')]:
             if fnmatch.fnmatch(name, pattern):
                 m = True
                 break
         if m:
             # excludes
-            for pattern in [p[1:] for p in file_patterns if p.startswith('~')]:
+            for pattern in [p[1:] for p in file_patterns + filters if p.startswith('~')]:
                 if fnmatch.fnmatch(name, pattern):
                     m = False
                     break
         return m
-    l = []
+
     for n in names:
         if match(n):
-            l.append(n)
-    return l
+            yield n
 
 def file_replace(file):
     try:
@@ -100,7 +102,7 @@ def dir_visitor(root, dirs, files):
     if not options.recursive:
         del dirs[:]
     else:
-        dirs[:] = filter_names(dirs)
+        dirs[:] = filter_names(dirs, ['*'])
 
 if __name__ == '__main__':
     parser = OptionParser(usage = 'usage: %prog [options] pattern pattern [files]')
