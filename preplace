@@ -20,6 +20,7 @@
 
 import os
 import re
+import types
 import fnmatch
 import itertools
 import fileinput
@@ -166,6 +167,21 @@ if __name__ == '__main__':
     file_patterns = args[2:]
     if not file_patterns or no(file_patterns, lambda x: not x.startswith('~')):
         file_patterns.insert(0, '*')
+
+    config_file = os.path.expanduser('~/.preplacerc')
+    if os.path.isfile(config_file):
+        g = {}
+        l = {}
+        execfile(config_file, g, l)
+        includes = l.get('INCLUDES', [])
+        excludes = l.get('EXCLUDES', [])
+        if not isinstance(includes, (types.ListType, types.TupleType)):
+            includes = [includes]
+        if not isinstance(excludes, (types.ListType, types.TupleType)):
+            excludes = [excludes]
+        file_patterns.extend(includes)
+        file_patterns.extend([e for e in excludes if e.startswith('~')])
+        file_patterns.extend(['~' + e for e in excludes if not e.startswith('~')])
 
     re_flags = []
     if options.ignore_case:
