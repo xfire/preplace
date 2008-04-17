@@ -196,6 +196,8 @@ if __name__ == '__main__':
     SR = re.compile(args[0], *re_flags)
     RR = args[1]
 
-    for root, dirs, files in os.walk(options.directory):
-        dir_visitor(root, dirs, files)
-
+    try:
+        for root, dirs, files in os.walk(options.directory):
+            dir_visitor(root, dirs, files)
+    except KeyboardInterrupt:
+        print 'Abort...'
