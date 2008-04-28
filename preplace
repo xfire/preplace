@@ -164,18 +164,23 @@ def parse_arguments():
                       dest = 'recursive',
                       help = 'recursive')
 
+    parser.set_defaults(diff = False)
+    parser.add_option('-d', '--diff',
+                      action = 'store_true',
+                      dest = 'diff',
+                      help = 'generate diff')
+
     parser.set_defaults(backup = False)
     parser.add_option('-b',
                       action = 'store_true',
                       dest = 'backup',
                       help = 'backup files')
 
-    parser.set_defaults(backup_suffix = '.orig')
-    parser.add_option('--suffix',
-                      dest = 'backup_suffix',
-                      type = 'string',
-                      metavar = 'S',
-                      help = 'backup suffix (default: .orig)')
+    parser.set_defaults(dry_run = False)
+    parser.add_option('-n', '--dry-run',
+                      action = 'store_true',
+                      dest = 'dry_run',
+                      help = 'dry run, list files which would be changed')
 
     parser.set_defaults(ignore_case = False)
     parser.add_option('-I',
@@ -195,18 +200,6 @@ def parse_arguments():
                       dest = 'quiet',
                       help = 'be quiet')
 
-    parser.set_defaults(verbose = False)
-    parser.add_option('-v',
-                      action = 'store_true',
-                      dest = 'verbose',
-                      help = 'be verbose (unified diff output)')
-
-    parser.set_defaults(dry_run = False)
-    parser.add_option('-n', '--dry-run',
-                      action = 'store_true',
-                      dest = 'dry_run',
-                      help = 'dry run, list files which would be changed')
-
     parser.set_defaults(config_file = '~/.preplacerc')
     parser.add_option('--config',
                       dest = 'config_file',
@@ -214,11 +207,12 @@ def parse_arguments():
                       metavar = 'C',
                       help = 'configuration file (default: ~/.preplacerc)')
 
-    parser.set_defaults(diff = False)
-    parser.add_option('-d', '--diff',
-                      action = 'store_true',
-                      dest = 'diff',
-                      help = 'generate diff')
+    parser.set_defaults(backup_suffix = '.orig')
+    parser.add_option('--suffix',
+                      dest = 'backup_suffix',
+                      type = 'string',
+                      metavar = 'S',
+                      help = 'backup suffix (default: .orig)')
 
     parser.set_defaults(diff_format = 'u')
     parser.add_option('--diff-format',
