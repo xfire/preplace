@@ -235,6 +235,9 @@ def parse_arguments():
     if not options.diff_format in DIFF_FUNCS:
         parser.error('invalid diff format: %s' % options.diff_format)
 
+    if options.diff and not options.dry_run:
+        parser.error('diff output only available in dry run mode')
+
     # split file patterns -> includes / excludes
     includes = set([p for p in args[2:] if not p.startswith('~')])
     excludes = set([p[1:] for p in args[2:] if p.startswith('~')])
@@ -295,9 +298,7 @@ if __name__ == '__main__':
             else:
                 files | diff_func(regex_old, regex_new) | show_files
         else:
-            pass
-        # files(directory, includes, excludes, recursive) | replace(old, new, backup, backup_suffix) | show
-
+            files | replace(regex_old, regex_new, options.backup, options.backup_suffix) | show_files
     except KeyboardInterrupt:
         print 'Abort...'
 
