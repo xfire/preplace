@@ -18,6 +18,7 @@
 #
 # vim:syntax=python:sw=4:ts=4:expandtab
 
+import sys
 import os
 import re
 import types
@@ -104,7 +105,7 @@ def dir_visitor(root, dirs, files):
     else:
         dirs[:] = filter_names(dirs, ['*'])
 
-if __name__ == '__main__':
+def parse_arguments():
     parser = OptionParser(usage = 'usage: %prog [options] pattern pattern [files]')
 
     parser.set_defaults(backup = False)
@@ -163,29 +164,42 @@ if __name__ == '__main__':
                       dest = 'dry_run',
                       help = 'dry_run')
 
+    parser.set_defaults(config_file = '~/.preplacerc')
+    parser.add_option('--config',
+                      dest = 'config_file',
+                      type = 'string',
+                      metavar = 'C',
+                      help = 'configuration file (default: ~/.preplacerc)')
+
     (options, args) = parser.parse_args()
 
     if len(args) < 2:
         parser.error('you must specify the search/replace patterns!')
 
     file_patterns = args[2:]
-    if not file_patterns or no(file_patterns, lambda x: not x.startswith('~')):
-        file_patterns.insert(0, '*')
+    includes = set([p for p in file_patterns if not p.startswith('~')])
+    excludes = set([p[1:] for p in file_patterns if p.startswith('~')])
 
-    config_file = os.path.expanduser('~/.preplacerc')
+    config_file = os.path.expanduser(options.config_file)
     if os.path.isfile(config_file):
         g = {}
         l = {}
-        execfile(config_file, g, l)
-        includes = l.get('INCLUDES', [])
-        excludes = l.get('EXCLUDES', [])
-        if not isinstance(includes, (types.ListType, types.TupleType)):
-            includes = [includes]
-        if not isinstance(excludes, (types.ListType, types.TupleType)):
-            excludes = [excludes]
-        file_patterns.extend(includes)
-        file_patterns.extend([e for e in excludes if e.startswith('~')])
-        file_patterns.extend(['~' + e for e in excludes if not e.startswith('~')])
+        try:
+            execfile(config_file, g, l)
+        except Exception, e:
+            print 'error, invalid configuration file (%s): %s' % (config_file, e)
+            sys.exit(1)
+        cfi = l.get('INCLUDES', [])
+        cfe = l.get('EXCLUDES', [])
+        if not isinstance(cfi, (types.ListType, types.TupleType)):
+            cfi = [cfi]
+        if not isinstance(cfe, (types.ListType, types.TupleType)):
+            cfe = [cfe]
+        includes.update(cfi)
+        excludes.update(cfe)
+
+    if not includes:
+        includes.add('*')
 
     re_flags = []
     if options.ignore_case:
@@ -193,11 +207,18 @@ if __name__ == '__main__':
     if options.multiline:
         re_flags.append(re.M)
 
-    SR = re.compile(args[0], *re_flags)
-    RR = args[1]
+    regex_old = re.compile(args[0], *re_flags)
+    regex_new = args[1]
 
-    try:
-        for root, dirs, files in os.walk(options.directory):
-            dir_visitor(root, dirs, files)
-    except KeyboardInterrupt:
-        print 'Abort...'
+    return (regex_old, regex_new, includes, excludes, options)
+
+if __name__ == '__main__':
+    regex_old, regex_new, includes, excludes, options = parse_arguments()
+    print includes
+    print excludes
+
+    # try:
+    #     for root, dirs, files in os.walk(options.directory):
+    #         dir_visitor(root, dirs, files)
+    # except KeyboardInterrupt:
+    #     print 'Abort...'
