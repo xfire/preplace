@@ -28,85 +28,138 @@ import fileinput
 import difflib
 from optparse import OptionParser
 
+try:
+    from functools import partial
+except ImportError:
+    # python < 2.5
+    def partial(func, *args, **keywords):
+        def newfunc(*fargs, **fkeywords):
+            newkeywords = keywords.copy()
+            newkeywords.update(fkeywords)
+            return func(*(args + fargs), **newkeywords)
+        newfunc.func = func
+        newfunc.args = args
+        newfunc.keywords = keywords
+        return newfunc
+
+
+def msg(s):
+    # TODO: use logger
+    print s
+
+def any(seq, pred=None):
+    "Returns True if pred(x) is true for at least one element in the iterable"
+    for elem in itertools.ifilter(pred, seq):
+        return True
+    return False
+
 def no(seq, pred=None):
-    """Returns True if pred(x) is false for every element in the iterable"""
+    "Returns True if pred(x) is false for every element in the iterable"
     for elem in itertools.ifilter(pred, seq):
         return False
     return True
 
-def msg(s):
-    """print message if not quiet"""
-    if not options.quiet:
-        print s
-
-def filter_names(names, filters = None):
-    """filter list of names using provided filters"""
-    if not filters:
-        filters = []
-
+def files(directories, includes = None, excludes = None, recursive = False):
     def match(name):
-        m = False
-        # includes
-        for pattern in [p for p in file_patterns + filters if not p.startswith('~')]:
-            if fnmatch.fnmatch(name, pattern):
-                m = True
-                break
-        if m:
-            # excludes
-            for pattern in [p[1:] for p in file_patterns + filters if p.startswith('~')]:
-                if fnmatch.fnmatch(name, pattern):
-                    m = False
-                    break
-        return m
-
-    for n in names:
-        if match(n):
-            yield n
-
-def file_replace(file):
-    try:
-        args = {}
-        if options.backup:
-            args['backup'] = options.backup_suffix
-        for line in fileinput.input(file, inplace = 1, **args):
-            print re.sub(SR, RR, line),
-    except IOError, e:
-        msg(e)
-
-def file_diff(file):
-    changed = False
-    try:
-        f = open(file, 'r')
-        try:
-            lines = f.readlines()
-        finally:
-            f.close()
-
-        for line in difflib.unified_diff(lines, [re.sub(SR, RR, l) for l in lines], file, file + '.new'):
-            print line,
-            changed = True
-    except IOError, e:
-        msg(e)
-    return changed
-
-def dir_visitor(root, dirs, files):
-    files = [os.path.join(root, f) for f in filter_names(files)]
-    if files:
-        for fn in files:
-            if options.verbose:
-                if file_diff(fn):
-                    print
+        return (any(includes, partial(fnmatch.fnmatch, name)) and
+                no(excludes, partial(fnmatch.fnmatch, name)))
+    for directory in directories:
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                fpath = os.path.normpath(os.path.join(root, file))
+                if match(file) and match(fpath):
+                    yield fpath
+            if not recursive:
+                del dirs[:]
             else:
-                msg('processing %s' % fn)
-            if not options.dry_run:
-                file_replace(fn)
-    if not options.recursive:
-        del dirs[:]
-    else:
-        dirs[:] = filter_names(dirs, ['*'])
+                dirs = [d for d in dirs if match(d)]
+
+class diff(object):
+    def __init__(self, dfunc, old, new):
+        self.__dfunc = dfunc
+        self.__old = old
+        self.__new = new
+    def __ror__(self, input):
+        for file in input:
+            try:
+                changed = False
+                f = open(file, 'r')
+                try:
+                    lines = f.readlines()
+                finally:
+                    f.close()
+                
+                diff = []
+                for line in self.__dfunc(lines, [re.sub(self.__old, self.__new, l) for l in lines], file, file + '.new'):
+                    diff.append(line)
+                    changed = True
+
+                if changed:
+                    yield (file, ''.join(diff))
+            except IOError, e:
+                msg(e)
+
+class unified_diff(diff):
+    def __init__(self, old, new):
+        super(unified_diff, self).__init__(difflib.unified_diff, old, new)
+class context_diff(diff):
+    def __init__(self, old, new):
+        super(context_diff, self).__init__(difflib.context_diff, old, new)
+class ndiff(diff):
+    def __init__(self, old, new):
+        def ndiff_wrapper(a, b, fromfile, tofile):
+            return difflib.ndiff(a, b)
+        super(ndiff, self).__init__(ndiff_wrapper, old, new)
+
+
+class replace(object):
+    def __init__(self, old, new, backup, backup_suffix):
+        self.__old = old
+        self.__new = new
+        self.__backup = backup
+        self.__backup_suffix = backup_suffix
+    def __ror__(self, input):
+        for file in input:
+            try:
+                changed = False
+                args = {}
+                if self.__backup:
+                    args['backup'] = self.__backup_suffix
+                for line in fileinput.input(file, inplace = 1, **args):
+                    nline = re.sub(self.__old, self.__new, line)
+                    if not nline is line:
+                        changed = True
+                    print nline,
+                if changed:
+                    yield file
+            except IOError, e:
+                msg(e)
+
+class show(object):
+    def __ror__(self, input):
+        for o in input:
+            if isinstance(o, (types.TupleType, types.ListType)):
+                for l in o:
+                    print l
+            else:
+                print o
+show = show()
 
 def parse_arguments():
     parser = OptionParser(usage = 'usage: %prog [options] pattern pattern [files]')
+
+    parser.set_defaults(recursive = False)
+    parser.add_option('-r',
+                      action = 'store_true',
+                      dest = 'recursive',
+                      help = 'recursive')
+
+    parser.set_defaults(directory = '.')
+    parser.add_option('-d',
+                      dest = 'directory',
+                      type = 'string',
+                      metavar = 'D',
+                      help = 'start from this directory')
 
     parser.set_defaults(backup = False)
     parser.add_option('-b',
@@ -121,48 +174,35 @@ def parse_arguments():
                       metavar = 'S',
                       help = 'backup suffix (default: .orig)')
 
-    parser.set_defaults(recursive = False)
-    parser.add_option('-r',
-                      action = 'store_true',
-                      dest = 'recursive',
-                      help = 'recursive')
-
-    parser.set_defaults(directory = '.')
-    parser.add_option('-d',
-                      dest = 'directory',
-                      type = 'string',
-                      metavar = 'D',
-                      help = 'directory')
-
     parser.set_defaults(ignore_case = False)
     parser.add_option('-I',
                       action = 'store_true',
                       dest = 'ignore_case',
-                      help = 'ignore case')
+                      help = 'match ignore case')
 
     parser.set_defaults(multiline = False)
     parser.add_option('-M',
                       action = 'store_true',
                       dest = 'multiline',
-                      help = 'multiline')
+                      help = 'match multiline')
 
     parser.set_defaults(quiet = False)
     parser.add_option('-q',
                       action = 'store_true',
                       dest = 'quiet',
-                      help = 'quiet')
+                      help = 'be quiet')
 
     parser.set_defaults(verbose = False)
     parser.add_option('-v',
                       action = 'store_true',
                       dest = 'verbose',
-                      help = 'verbose (unified diff output)')
+                      help = 'be verbose (unified diff output)')
 
     parser.set_defaults(dry_run = False)
     parser.add_option('-n', '--dry-run',
                       action = 'store_true',
                       dest = 'dry_run',
-                      help = 'dry_run')
+                      help = 'dry run, list files which would be changed')
 
     parser.set_defaults(config_file = '~/.preplacerc')
     parser.add_option('--config',
@@ -171,15 +211,26 @@ def parse_arguments():
                       metavar = 'C',
                       help = 'configuration file (default: ~/.preplacerc)')
 
+    parser.set_defaults(diff_format = 'u')
+    parser.add_option('--diff-format',
+                      dest = 'diff_format',
+                      type = 'string',
+                      metavar = 'DF',
+                      help = 'diff output format [(u)nified, (c)ontex, (n)diff] (default: (u)nified)')
+
     (options, args) = parser.parse_args()
 
     if len(args) < 2:
         parser.error('you must specify the search/replace patterns!')
 
-    file_patterns = args[2:]
-    includes = set([p for p in file_patterns if not p.startswith('~')])
-    excludes = set([p[1:] for p in file_patterns if p.startswith('~')])
+    if not options.diff_format in ('u', 'c', 'n'):
+        parser.error('invalid diff format: %s' % options.diff_format)
 
+    # split file patterns -> includes / excludes
+    includes = set([p for p in args[2:] if not p.startswith('~')])
+    excludes = set([p[1:] for p in args[2:] if p.startswith('~')])
+
+    # read additional includes / excludes from user config file
     config_file = os.path.expanduser(options.config_file)
     if os.path.isfile(config_file):
         g = {}
@@ -198,6 +249,17 @@ def parse_arguments():
         includes.update(cfi)
         excludes.update(cfe)
 
+    # extract directories from includes, set . if nothing found
+    directories = (os.path.dirname(i) for i in includes if not os.path.isdir(i))
+    directories = set([d for d in directories if d and not d in excludes])
+    directories.update(d for d in includes if os.path.isdir(d))
+    if not directories: # add current directory, if no directory found in patterns
+        directories.add('.')
+    # strip directories from includes and filter out plain directories, won't work for /foo/*/bar/*.blub
+    includes = set([os.path.basename(p) for p in includes if not os.path.isdir(p)])
+    # normalize excludes
+    excludes = set([os.path.normpath(p) for p in excludes])
+
     if not includes:
         includes.add('*')
 
@@ -210,15 +272,30 @@ def parse_arguments():
     regex_old = re.compile(args[0], *re_flags)
     regex_new = args[1]
 
-    return (regex_old, regex_new, includes, excludes, options)
+    return (regex_old, regex_new, directories, includes, excludes, options)
 
 if __name__ == '__main__':
-    regex_old, regex_new, includes, excludes, options = parse_arguments()
-    print includes
-    print excludes
 
-    # try:
-    #     for root, dirs, files in os.walk(options.directory):
-    #         dir_visitor(root, dirs, files)
-    # except KeyboardInterrupt:
-    #     print 'Abort...'
+    try:
+        regex_old, regex_new, directories, includes, excludes, options = parse_arguments()
+
+        print includes
+        print excludes
+        print directories
+
+        recursive = True
+        old = re.compile(r'def')
+        new = 'foo'
+        backup = False
+        backup_suffix = '.orig'
+
+        if options.dry_run:
+            files(directories, includes, excludes, options.recursive) | show
+        # files(directory, includes, excludes, recursive) | unified_diff(old, new) | show
+        # files(directory, includes, excludes, recursive) | context_diff(old, new) | show
+        # files(directory, includes, excludes, recursive) | ndiff(old, new) | show
+        # files(directory, includes, excludes, recursive) | replace(old, new, backup, backup_suffix) | show
+
+    except KeyboardInterrupt:
+        print 'Abort...'
+
