@@ -59,7 +59,7 @@ def no(seq, pred=None):
         return False
     return True
 
-def files(directories, includes = None, excludes = None, recursive = False):
+def gen_files(directories, includes = None, excludes = None, recursive = False):
     def match(name):
         return (any(includes, partial(fnmatch.fnmatch, name)) and
                 no(excludes, partial(fnmatch.fnmatch, name)))
@@ -111,6 +111,9 @@ class ndiff(diff):
             return difflib.ndiff(a, b)
         super(ndiff, self).__init__(ndiff_wrapper, old, new)
 
+DIFF_FUNCS = dict(u = unified_diff, 
+                  c = context_diff, 
+                  n = ndiff)
 
 class replace(object):
     def __init__(self, old, new, backup, backup_suffix):
@@ -135,15 +138,22 @@ class replace(object):
             except IOError, e:
                 msg(e)
 
-class show(object):
+class show_all(object):
+    def __init__(self, what = -1):
+        self.__what = what
     def __ror__(self, input):
         for o in input:
             if isinstance(o, (types.TupleType, types.ListType)):
-                for l in o:
-                    print l
+                if self.__what >= 0:
+                    print o[self.__what]
+                else:
+                    for l in o:
+                        print l
             else:
                 print o
-show = show()
+show = show_all()
+show_files = show_all(0)
+show_diff = show_all(1)
 
 def parse_arguments():
     parser = OptionParser(usage = 'usage: %prog [options] pattern pattern [files]')
@@ -153,13 +163,6 @@ def parse_arguments():
                       action = 'store_true',
                       dest = 'recursive',
                       help = 'recursive')
-
-    parser.set_defaults(directory = '.')
-    parser.add_option('-d',
-                      dest = 'directory',
-                      type = 'string',
-                      metavar = 'D',
-                      help = 'start from this directory')
 
     parser.set_defaults(backup = False)
     parser.add_option('-b',
@@ -211,6 +214,12 @@ def parse_arguments():
                       metavar = 'C',
                       help = 'configuration file (default: ~/.preplacerc)')
 
+    parser.set_defaults(diff = False)
+    parser.add_option('-d', '--diff',
+                      action = 'store_true',
+                      dest = 'diff',
+                      help = 'generate diff')
+
     parser.set_defaults(diff_format = 'u')
     parser.add_option('--diff-format',
                       dest = 'diff_format',
@@ -223,7 +232,7 @@ def parse_arguments():
     if len(args) < 2:
         parser.error('you must specify the search/replace patterns!')
 
-    if not options.diff_format in ('u', 'c', 'n'):
+    if not options.diff_format in DIFF_FUNCS:
         parser.error('invalid diff format: %s' % options.diff_format)
 
     # split file patterns -> includes / excludes
@@ -275,25 +284,18 @@ def parse_arguments():
     return (regex_old, regex_new, directories, includes, excludes, options)
 
 if __name__ == '__main__':
-
     try:
         regex_old, regex_new, directories, includes, excludes, options = parse_arguments()
 
-        print includes
-        print excludes
-        print directories
-
-        recursive = True
-        old = re.compile(r'def')
-        new = 'foo'
-        backup = False
-        backup_suffix = '.orig'
-
+        files = gen_files(directories, includes, excludes, options.recursive)
         if options.dry_run:
-            files(directories, includes, excludes, options.recursive) | show
-        # files(directory, includes, excludes, recursive) | unified_diff(old, new) | show
-        # files(directory, includes, excludes, recursive) | context_diff(old, new) | show
-        # files(directory, includes, excludes, recursive) | ndiff(old, new) | show
+            diff_func = DIFF_FUNCS[options.diff_format]
+            if options.diff:
+                files | diff_func(regex_old, regex_new) | show_diff
+            else:
+                files | diff_func(regex_old, regex_new) | show_files
+        else:
+            pass
         # files(directory, includes, excludes, recursive) | replace(old, new, backup, backup_suffix) | show
 
     except KeyboardInterrupt:
