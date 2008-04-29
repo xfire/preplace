@@ -284,6 +284,13 @@ def parse_arguments():
     return (regex_old, regex_new, directories, includes, excludes, options)
 
 if __name__ == '__main__':
+    # Import Psyco if available
+    try:
+        import psyco
+        psyco.full()
+    except ImportError:
+        pass
+
     try:
         regex_old, regex_new, directories, includes, excludes, options = parse_arguments()
 
