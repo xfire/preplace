@@ -26,6 +26,7 @@ import fnmatch
 import itertools
 import fileinput
 import difflib
+import logging
 from optparse import OptionParser
 
 try:
@@ -42,10 +43,6 @@ except ImportError:
         newfunc.keywords = keywords
         return newfunc
 
-
-def msg(s):
-    # TODO: use logger
-    print s
 
 def any(seq, pred=None):
     "Returns True if pred(x) is true for at least one element in the iterable"
@@ -97,7 +94,7 @@ class diff(object):
                 if changed:
                     yield (file, ''.join(diff))
             except IOError, e:
-                msg(e)
+                logging.error(e)
 
 class unified_diff(diff):
     def __init__(self, old, new):
@@ -136,7 +133,7 @@ class replace(object):
                 if changed:
                     yield file
             except IOError, e:
-                msg(e)
+                logging.error(e)
 
 class show_all(object):
     def __init__(self, what = -1):
@@ -232,6 +229,12 @@ def parse_arguments():
     if options.diff and not options.dry_run:
         parser.error('diff output only available in dry run mode')
 
+    # setup logger
+    loglevel = logging.ERROR
+    if options.quiet:
+        loglevel = logging.CRITICAL
+    logging.basicConfig(format = '%(levelname)s: %(message)s', level = loglevel)
+
     # split file patterns -> includes / excludes
     includes = set([p for p in args[2:] if not p.startswith('~')])
     excludes = set([p[1:] for p in args[2:] if p.startswith('~')])
@@ -244,7 +247,7 @@ def parse_arguments():
         try:
             execfile(config_file, g, l)
         except Exception, e:
-            print 'error, invalid configuration file (%s): %s' % (config_file, e)
+            logging.error('error, invalid configuration file (%s): %s' % (config_file, e))
             sys.exit(1)
         cfi = l.get('INCLUDES', [])
         cfe = l.get('EXCLUDES', [])
