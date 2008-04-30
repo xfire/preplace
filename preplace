@@ -79,32 +79,34 @@ class diff(object):
     def __ror__(self, input):
         for file in input:
             try:
-                changed = False
                 f = open(file, 'r')
                 try:
-                    lines = f.readlines()
+                    lines = f.read()
                 finally:
                     f.close()
                 
-                diff = []
-                for line in self.__dfunc(lines, [re.sub(self.__old, self.__new, l) for l in lines], file, file + '.new'):
-                    diff.append(line)
-                    changed = True
+                diff = '\n'.join(self.__dfunc(lines.split('\n'), 
+                                              re.sub(self.__old, self.__new, lines).split('\n'), 
+                                              file, 
+                                              file + '.new',
+                                              lineterm = ''))
 
-                if changed:
-                    yield (file, ''.join(diff))
+                if diff:
+                    yield (file, diff)
             except IOError, e:
                 logging.error(e)
 
 class unified_diff(diff):
     def __init__(self, old, new):
         super(unified_diff, self).__init__(difflib.unified_diff, old, new)
+
 class context_diff(diff):
     def __init__(self, old, new):
         super(context_diff, self).__init__(difflib.context_diff, old, new)
+
 class ndiff(diff):
     def __init__(self, old, new):
-        def ndiff_wrapper(a, b, fromfile, tofile):
+        def ndiff_wrapper(a, b, fromfile, tofile, lineterm):
             return difflib.ndiff(a, b)
         super(ndiff, self).__init__(ndiff_wrapper, old, new)
 
