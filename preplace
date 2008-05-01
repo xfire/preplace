@@ -24,7 +24,6 @@ import re
 import types
 import fnmatch
 import itertools
-import fileinput
 import difflib
 import logging
 from optparse import OptionParser
@@ -85,14 +84,15 @@ class diff(object):
                 finally:
                     f.close()
                 
-                diff = '\n'.join(self.__dfunc(lines.split('\n'), 
-                                              re.sub(self.__old, self.__new, lines).split('\n'), 
-                                              file, 
-                                              file + '.new',
-                                              lineterm = ''))
-
-                if diff:
-                    yield (file, diff)
+                new_lines, changed = re.subn(self.__old, self.__new, lines)
+                if changed:
+                    diff = '\n'.join(self.__dfunc(lines.split('\n'), 
+                                                  new_lines.split('\n'), 
+                                                  file, 
+                                                  file + '.new',
+                                                  lineterm = ''))
+                    if diff:
+                        yield (file, diff)
             except IOError, e:
                 logging.error(e)
 
@@ -123,19 +123,33 @@ class replace(object):
     def __ror__(self, input):
         for file in input:
             try:
-                changed = False
-                args = {}
-                if self.__backup:
-                    args['backup'] = self.__backup_suffix
-                for line in fileinput.input(file, inplace = 1, **args):
-                    nline = re.sub(self.__old, self.__new, line)
-                    if not nline is line:
-                        changed = True
-                    print nline,
+                f = open(file, 'r')
+                try:
+                    lines = f.read()
+                finally:
+                    f.close()
+
+                lines, changed = re.subn(self.__old, self.__new, lines)
                 if changed:
+                    if self.__backup:
+                        bak_file = '%s%s' % (file, self.__backup_suffix)
+                        if os.path.exists(bak_file): 
+                            os.unlink(bak_file)
+                        os.rename(file, bak_file)
+                    f = open(file, 'w')
+                    try:
+                        f.write(lines)
+                    finally:
+                        f.close()
+
                     yield file
-            except IOError, e:
+            except (IOError, OSError), e:
                 logging.error(e)
+
+class show_nothing(object):
+    def __ror__(self, input):
+        for o in input: pass
+show_nothing = show_nothing()
 
 class show_all(object):
     def __init__(self, what = -1):
@@ -297,14 +311,23 @@ if __name__ == '__main__':
         regex_old, regex_new, directories, includes, excludes, options = parse_arguments()
 
         files = gen_files(directories, includes, excludes, options.recursive)
+
+        if options.quiet:
+            show_func = show_nothing
+        else:
+            if options.diff:
+                show_func = show_diff
+            else:
+                show_func = show_files
+
         if options.dry_run:
             diff_func = DIFF_FUNCS[options.diff_format]
             if options.diff:
                 files | diff_func(regex_old, regex_new) | show_diff
             else:
-                files | diff_func(regex_old, regex_new) | show_files
+                files | diff_func(regex_old, regex_new) | show_func
         else:
-            files | replace(regex_old, regex_new, options.backup, options.backup_suffix) | show_files
+            files | replace(regex_old, regex_new, options.backup, options.backup_suffix) | show_func
     except KeyboardInterrupt:
         print 'Abort...'
 
