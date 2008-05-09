@@ -305,7 +305,11 @@ def parse_arguments():
     if options.multiline:
         re_flags.append(re.M)
 
-    regex_old = re.compile(args[0], *re_flags)
+    try:
+        regex_old = re.compile(args[0], *re_flags)
+    except re.error, e:
+        parser.error('invalid search pattern (%s)' % e)
+
     regex_new = args[1]
 
     return (regex_old, regex_new, directories, includes, excludes, options)
