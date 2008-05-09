@@ -193,7 +193,7 @@ def parse_arguments():
     parser.add_option('-n', '--dry-run',
                       action = 'store_true',
                       dest = 'dry_run',
-                      help = 'dry run, list files which would be changed')
+                      help = 'do not perform actions, just print output')
 
     parser.set_defaults(ignore_case = False)
     parser.add_option('-I',
@@ -242,8 +242,9 @@ def parse_arguments():
     if not options.diff_format in DIFF_FUNCS:
         parser.error('invalid diff format: %s' % options.diff_format)
 
-    if options.diff and not options.dry_run:
-        parser.error('diff output only available in dry run mode')
+    if options.diff:
+        options.dry_run = True
+        assert options.dry_run == True, 'can not set dry run mode'
 
     # setup logger
     loglevel = logging.ERROR
