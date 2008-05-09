@@ -322,11 +322,7 @@ if __name__ == '__main__':
                 show_func = show_files
 
         if options.dry_run:
-            diff_func = DIFF_FUNCS[options.diff_format]
-            if options.diff:
-                files | diff_func(regex_old, regex_new) | show_diff
-            else:
-                files | diff_func(regex_old, regex_new) | show_func
+            files | DIFF_FUNCS[options.diff_format](regex_old, regex_new) | show_func
         else:
             files | replace(regex_old, regex_new, options.backup, options.backup_suffix) | show_func
     except KeyboardInterrupt:
