@@ -1,0 +1,67 @@
+preplace 0.1
+============
+powerfull commandline search and replace tool.
+
+,----
+| installation
+`----
+ preplace can be run from every place, but it is suggested to copy
+ it to a directory which is in your $PATH.
+
+,----
+| usage
+`----
+ see --help for brief usage details.
+
+ preplace is a python script and uses the 're' module for search 
+ and replacing. the first pattern is the search part, the second one
+ the replace part.
+ e.g.
+    preplace 'foo' 'bar'
+    preplace '(blue|white|red)' 'color'
+    preplace '(#include +)<([^>]+)>' '\g<1>"\g<2>"'
+    ...
+
+ for more informations see the regex syntax: http://docs.python.org/lib/re-syntax.html
+ and the official tutorial: http://docs.python.org/dev/howto/regex.html
+
+ 
+
+,----
+| configuration file
+`----
+ preplace try to read configuration from $HOME/.preplacerc, unless
+ you use the --config parameter.
+
+ the configuration file supports at the moment the following options:
+    EXCLUDES = [list of strings]
+    INCLUDES = [list of strings]
+ e.g.
+    EXCLUDES = ['*svn*', '*.o', '*.a', '*.pyc']
+    INCLUDES = ['*.cc'. '*.hh', '*.hxx']
+
+ you can use normal python syntax, e.g. list comprehensions.
+
+,----
+| license
+`----
+ Copyright (c) 2008 Rico Schiekel
+
+ This program is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program; if not, write to the Free Software
+ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+,----
+| authors
+`----
+ current developers:
+  Rico Schiekel <preplace@downgra.de>
